@@ -1,0 +1,33 @@
+# Telegram Bot
+aiogram==3.20.0
+
+# OpenAI Integration
+openai>=1.86.0
+
+# Database
+aiosqlite==0.21.0
+
+# Configuration & Validation
+python-dotenv==1.0.1
+pydantic==2.10.4
+pydantic-settings==2.6.1
+
+# File Processing
+Pillow==10.4.0
+aiofiles==24.1.0
+
+# Logging
+loguru==0.7.2
+
+# HTTP requests
+aiohttp==3.11.10
+
+# Development tools
+python-multipart==0.0.17
+
+# HTTP client for validate_config.py
+requests==2.32.3
+
+# Testing
+pytest==8.4.1
+pytest-asyncio==1.0.0
