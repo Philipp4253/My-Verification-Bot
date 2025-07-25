@@ -1,0 +1,189 @@
+"""Репозиторий для работы с таблицей user_group_verifications."""
+
+from typing import Optional, List
+from .base import BaseRepository
+from ..models.user_group_verification import UserGroupVerification
+
+
+class UserGroupVerificationRepository(BaseRepository):
+    """Репозиторий для управления верификацией пользователей в группах."""
+
+    async def get_or_create(self, user_id: int, group_id: int) -> UserGroupVerification:
+        """Получает или создает запись верификации для пользователя в группе."""
+        existing = await self.get_by_user_and_group(user_id, group_id)
+        if existing:
+            return existing
+
+        await self._ensure_user_exists(user_id)
+        await self._ensure_group_exists(group_id)
+
+        verification = UserGroupVerification(
+            user_id=user_id,
+            group_id=group_id,
+            verified=False,
+            requires_verification=False,
+            attempts_count=0
+        )
+        await self.add(verification)
+        return verification
+
+    async def create_for_new_member(self, user_id: int, group_id: int) -> UserGroupVerification:
+        """Создает запись верификации для нового участника группы (помечает как требующего верификации)."""
+        await self._ensure_user_exists(user_id)
+        await self._ensure_group_exists(group_id)
+
+        verification = UserGroupVerification(
+            user_id=user_id,
+            group_id=group_id,
+            verified=False,
+            requires_verification=True,
+            attempts_count=0
+        )
+        await self.add(verification)
+        return verification
+
+    async def create_for_existing_member(self, user_id: int, group_id: int) -> UserGroupVerification:
+        """Создает запись верификации для существующего участника группы (НЕ помечает как требующего верификации)."""
+        await self._ensure_user_exists(user_id)
+        await self._ensure_group_exists(group_id)
+
+        verification = UserGroupVerification(
+            user_id=user_id,
+            group_id=group_id,
+            verified=False,
+            requires_verification=False,
+            attempts_count=0
+        )
+        await self.add(verification)
+        return verification
+
+    async def _ensure_user_exists(self, user_id: int) -> None:
+        """Убеждается, что пользователь существует в таблице users."""
+        check_query = "SELECT 1 FROM users WHERE telegram_id = ?"
+        exists = await self.fetchone(check_query, (user_id,))
+
+        if not exists:
+            insert_query = """
+                INSERT INTO users (telegram_id, created_at)
+                VALUES (?, datetime('now'))
+            """
+            await self.execute(insert_query, (user_id,))
+
+    async def _ensure_group_exists(self, group_id: int) -> None:
+        """Убеждается, что группа существует в таблице groups."""
+        check_query = "SELECT 1 FROM groups WHERE group_id = ?"
+        exists = await self.fetchone(check_query, (group_id,))
+
+        if not exists:
+            insert_query = """
+                INSERT INTO groups (group_id, is_active, added_at, updated_at)
+                VALUES (?, TRUE, datetime('now'), datetime('now'))
+            """
+            await self.execute(insert_query, (group_id,))
+
+    async def get_by_user_and_group(self, user_id: int, group_id: int) -> Optional[UserGroupVerification]:
+        """Получает запись верификации для пользователя в конкретной группе."""
+        query = "SELECT * FROM user_group_verifications WHERE user_id = ? AND group_id = ?"
+        row = await self.fetchone(query, (user_id, group_id))
+        return UserGroupVerification(**row) if row else None
+
+    async def add(self, verification: UserGroupVerification) -> None:
+        """Добавляет новую запись верификации."""
+        query = """
+            INSERT INTO user_group_verifications (user_id, group_id, verified, requires_verification, verification_type, verified_at, attempts_count, state, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+        """
+        await self.execute(query, (
+            verification.user_id,
+            verification.group_id,
+            verification.verified,
+            verification.requires_verification,
+            verification.verification_type,
+            verification.verified_at,
+            verification.attempts_count,
+            verification.state
+        ))
+
+    async def add_or_update(self, verification: UserGroupVerification) -> None:
+        """Добавляет новую запись верификации или обновляет существующую."""
+        query = """
+            INSERT INTO user_group_verifications (user_id, group_id, verified, requires_verification, verification_type, verified_at, attempts_count, state, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+            ON CONFLICT(user_id, group_id) DO UPDATE SET
+                verified = excluded.verified,
+                requires_verification = excluded.requires_verification,
+                verification_type = excluded.verification_type,
+                verified_at = excluded.verified_at,
+                attempts_count = excluded.attempts_count,
+                state = excluded.state,
+                updated_at = datetime('now')
+        """
+        await self.execute(query, (
+            verification.user_id,
+            verification.group_id,
+            verification.verified,
+            verification.requires_verification,
+            verification.verification_type,
+            verification.verified_at,
+            verification.attempts_count,
+            verification.state
+        ))
+
+    async def update_verified_status(self, user_id: int, group_id: int, verified: bool, verification_type: str = "manual") -> None:
+        """Обновляет статус верификации пользователя в группе."""
+        verified_at = "datetime('now')" if verified else "NULL"
+        query = f"""
+            UPDATE user_group_verifications
+            SET verified = ?, verification_type = ?, verified_at = {verified_at}, updated_at = datetime('now')
+            WHERE user_id = ? AND group_id = ?
+        """
+        await self.execute(query, (verified, verification_type, user_id, group_id))
+
+    async def update_requires_verification(self, user_id: int, group_id: int, requires_verification: bool) -> None:
+        """Обновляет флаг требования верификации."""
+        query = """
+            UPDATE user_group_verifications
+            SET requires_verification = ?, updated_at = datetime('now')
+            WHERE user_id = ? AND group_id = ?
+        """
+        await self.execute(query, (requires_verification, user_id, group_id))
+
+    async def increment_attempts(self, user_id: int, group_id: int) -> None:
+        """Увеличивает счетчик попыток верификации."""
+        query = """
+            UPDATE user_group_verifications
+            SET attempts_count = attempts_count + 1, updated_at = datetime('now')
+            WHERE user_id = ? AND group_id = ?
+        """
+        await self.execute(query, (user_id, group_id))
+
+    async def update_state(self, user_id: int, group_id: int, state: Optional[str]) -> None:
+        """Обновляет состояние верификации пользователя в группе."""
+        query = """
+            UPDATE user_group_verifications
+            SET state = ?, updated_at = datetime('now')
+            WHERE user_id = ? AND group_id = ?
+        """
+        await self.execute(query, (state, user_id, group_id))
+
+    async def get_user_verifications(self, user_id: int) -> List[UserGroupVerification]:
+        """Получает все верификации пользователя по всем группам."""
+        query = "SELECT * FROM user_group_verifications WHERE user_id = ?"
+        rows = await self.fetchall(query, (user_id,))
+        return [UserGroupVerification(**row) for row in rows]
+
+    async def get_group_verifications(self, group_id: int) -> List[UserGroupVerification]:
+        """Получает все верификации в конкретной группе."""
+        query = "SELECT * FROM user_group_verifications WHERE group_id = ?"
+        rows = await self.fetchall(query, (group_id,))
+        return [UserGroupVerification(**row) for row in rows]
+
+    async def is_user_verified_in_group(self, user_id: int, group_id: int) -> bool:
+        """Проверяет, верифицирован ли пользователь в конкретной группе."""
+        verification = await self.get_by_user_and_group(user_id, group_id)
+        return verification.verified if verification else False
+
+    async def delete_by_user_and_group(self, user_id: int, group_id: int) -> None:
+        """Удаляет запись верификации для пользователя в конкретной группе."""
+        query = "DELETE FROM user_group_verifications WHERE user_id = ? AND group_id = ?"
+        await self.execute(query, (user_id, group_id))
