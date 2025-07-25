@@ -1,0 +1,16 @@
+CREATE TABLE IF NOT EXISTS user_group_verifications (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    group_id INTEGER NOT NULL,
+    verified BOOLEAN DEFAULT FALSE,
+    requires_verification BOOLEAN DEFAULT FALSE,
+    verification_type TEXT,
+    verified_at TIMESTAMP,
+    attempts_count INTEGER DEFAULT 0,
+    state TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (user_id, group_id),
+    FOREIGN KEY (user_id) REFERENCES users (telegram_id),
+    FOREIGN KEY (group_id) REFERENCES groups (group_id)
+);
