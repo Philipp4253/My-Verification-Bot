@@ -2,6 +2,31 @@
 from typing import List, Optional, Any
 from pydantic import Field, field_validator, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import BaseSettings
+
+class Settings(BaseSettings):
+    # ID групп для модерации (добавьте свои реальные ID через запятую)
+    MODERATED_CHATS: list[int] = [-10012345678]  # Пример ID группы (замените на реальный)
+    
+    # ID администраторов бота (ваш личный ID)
+    ADMIN_USER_IDS: list[int] = [123456789]  # Ваш Telegram ID
+    
+    # Время на верификацию (в часах)
+    VERIFICATION_TIME_LIMIT: int = 24  # 24 часа
+    
+    # Интервал проверки (в секундах)
+    CHECK_INTERVAL: int = 60  # Для теста: 60 сек = 1 минута (в продакшене 3600 = 1 час)
+    
+    # Настройки базы данных
+    DATABASE_URL: str = "sqlite:///database.db"
+    
+    # Токен бота (лучше через .env)
+    BOT_TOKEN: str = "ваш_токен_бота"
+
+    class Config:
+        env_file = ".env"  # Для загрузки настроек из .env файла
+
+settings = Settings()
 
 
 class Settings(BaseSettings):
