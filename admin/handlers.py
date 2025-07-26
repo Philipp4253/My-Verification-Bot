@@ -240,3 +240,56 @@ async def admin_deep_link_handler(message: Message, admin_service: AdminService,
         await message.answer(
             "❌ Произошла ошибка. Попробуйте использовать команду /admin в группе."
         )
+@admin_handlers_router.message(Command("report"), F.chat.type.in_(["group", "supergroup"]))
+async def cmd_report(
+    message: Message,
+    admin_service: AdminService,
+    settings: Settings
+):
+    """Отправляет администратору отчет по верификации"""
+    try:
+        # Проверяем права админа
+        is_admin = await user_is_admin_in_chat(
+            message.from_user, message.chat.id, admin_service, settings, message.bot
+        )
+        if not is_admin:
+            return
+
+        # Получаем данные из БД
+        verified = await admin_service.get_verified_users(message.chat.id)
+        unverified = await admin_service.get_unverified_users(message.chat.id)
+
+        # Формируем сообщение
+        report_text = (
+            f"📊 <b>Отчет по верификации в {message.chat.title}</b>\n\n"
+            f"✅ <b>Верифицированные:</b> {len(verified)}\n"
+            f"❌ <b>Неверифицированные:</b> {len(unverified)}\n\n"
+        )
+
+        # Добавляем списки, если они не слишком большие
+        if len(verified) <= 50:
+            report_text += "✅ <b>Список верифицированных:</b>\n" + "\n".join([f"- {u[1] or u[0]}" for u in verified])
+        else:
+            report_text += "✅ <b>Слишком много верифицированных для отображения</b>\n"
+
+        if len(unverified) <= 50:
+            report_text += "\n❌ <b>Список неверифицированных:</b>\n" + "\n".join([f"- {u[1] or u[0]}" for u in unverified])
+        else:
+            report_text += "\n❌ <b>Слишком много неверифицированных для отображения</b>\n"
+
+        # Отправляем сообщение
+        await message.reply(report_text, parse_mode="HTML")
+
+        # Создаем и отправляем файл
+        with open("verification_report.txt", "w", encoding="utf-8") as f:
+            f.write(f"Отчет по верификации в {message.chat.title}\n\n")
+            f.write("Верифицированные пользователи:\n")
+            f.write("\n".join([f"{u[0]}: {u[1]}" for u in verified]))
+            f.write("\n\nНеверифицированные пользователи:\n")
+            f.write("\n".join([f"{u[0]}: {u[1]}" for u in unverified]))
+
+        await message.reply_document(InputFile("verification_report.txt"))
+
+    except Exception as e:
+        logger.error(f"Ошибка при формировании отчета: {e}")
+        await message.reply("❌ Произошла ошибка при формировании отчета")
