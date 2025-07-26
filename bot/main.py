@@ -16,6 +16,19 @@ import asyncio
 from datetime import datetime
 from aiogram import Bot
 
+from bot.app import BotApp
+import asyncio
+import logging
+
+logging.basicConfig(level=logging.INFO)
+
+async def main():
+    app = BotApp()
+    await app.start_polling()
+
+if __name__ == '__main__':
+    asyncio.run(main())
+
 async def start_background_tasks(bot: Bot, admin_service: AdminService, settings: Settings):
     """Запуск фоновых задач при старте бота"""
     async def _check_unverified():
