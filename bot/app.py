@@ -15,7 +15,18 @@ from bot.dispatcher_setup import setup_dispatcher
 from bot.utils.commands import set_bot_commands
 from config.settings import Settings
 
+from aiogram import Bot, Dispatcher
 
+class BotApp:
+    def __init__(self):
+        self.bot = Bot(token="ваш_токен")  # Лучше брать из settings
+        self.dp = Dispatcher()
+
+    async def start_polling(self):
+        try:
+            await self.dp.start_polling(self.bot)
+        except Exception as e:
+            logger.error(f"Ошибка запуска: {e}")
 class BotApp:
     """
     Основной класс приложения, который инициализирует и координирует
