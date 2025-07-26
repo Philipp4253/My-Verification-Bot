@@ -11,6 +11,51 @@ from config.settings import Settings
 from aiogram.dispatcher.filters import ChatMemberUpdatedFilter
 from aiogram.dispatcher.filters.state import IS_NOT_MEMBER, IS_MEMBER
 
+# main.py (или аналогичный основной файл)
+import asyncio
+from datetime import datetime
+from aiogram import Bot
+
+async def start_background_tasks(bot: Bot, admin_service: AdminService, settings: Settings):
+    """Запуск фоновых задач при старте бота"""
+    async def _check_unverified():
+        while True:
+            try:
+                for chat_id in settings.moderated_chats:
+                    unverified = await admin_service.get_unverified_users(chat_id)
+                    now = datetime.now()
+                    
+                    for user_id, username, join_date in unverified:
+                        if isinstance(join_date, str):
+                            join_date = datetime.fromisoformat(join_date)
+                        
+                        if (now - join_date).total_seconds() > 24 * 3600:  # 24 часа
+                            try:
+                                await bot.ban_chat_member(chat_id, user_id)
+                                await bot.unban_chat_member(chat_id, user_id)
+                                await admin_service.remove_user(user_id, chat_id)
+                                logger.info(f"Удален {user_id} из {chat_id}")
+                            except Exception as e:
+                                logger.error(f"Ошибка удаления {user_id}: {e}")
+            except Exception as e:
+                logger.error(f"Ошибка в фоновой задаче: {e}")
+            
+            await asyncio.sleep(3600)  # Проверка каждый час
+
+    asyncio.create_task(_check_unverified())
+
+# В функции запуска бота (обычно в конце файла):
+async def on_startup(dispatcher, bot: Bot):
+    admin_service = AdminService(bot)  # Или как ты инициализируешь сервис
+    settings = Settings()  # Твои настройки
+    
+    # Запускаем фоновые задачи
+    await start_background_tasks(bot, admin_service, settings)
+
+if __name__ == '__main__':
+    from aiogram import executor
+    executor.start_polling(dp, on_startup=on_startup)
+
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
@@ -58,3 +103,4 @@ async def background_tasks(bot: Bot, admin_service: AdminService):
 async def on_startup(bot: Bot, admin_service: AdminService):
     """Действия при запуске бота"""
     asyncio.create_task(background_tasks(bot, admin_service))
+
