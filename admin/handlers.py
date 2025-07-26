@@ -319,3 +319,15 @@ async def on_new_member(event: ChatMemberUpdated, admin_service: AdminService):
         )
     except Exception as e:
         logger.error(f"Не удалось отправить сообщение {user.id}: {e}")
+
+@admin_handlers_router.message(Command("verify"))
+async def cmd_verify(message: Message, admin_service: AdminService):
+    """Обработчик команды верификации"""
+    if await admin_service.is_user_verified(message.from_user.id, message.chat.id):
+        await message.reply("✅ Вы уже верифицированы!")
+        return
+
+    # Здесь твоя логика верификации
+    # После успешной верификации:
+    await admin_service.verify_user(message.from_user.id, message.chat.id)
+    await message.reply("🎉 Верификация пройдена! Теперь вы можете писать в чат")
