@@ -74,3 +74,8 @@ class AdminService:
         :return: Объект группы или None, если группа не найдена.
         """
         return await self.db.groups.get_by_id(group_id)
+
+async def is_user_verified(self, user_id: int, chat_id: int) -> bool:
+    """Проверяет, прошел ли пользователь верификацию в указанном чате"""
+    # Реализуй этот метод в соответствии с твоей структурой базы данных
+    # Должен возвращать True, если пользователь верифицирован
