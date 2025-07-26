@@ -106,3 +106,10 @@ async def check_unverified_users(self, chat_id: int, hours_limit: int = 24):
     except Exception as e:
         logger.error(f"Ошибка в check_unverified_users: {e}")
         return 0
+async def get_verified_users(self, chat_id: int) -> list[tuple[int, str]]:
+    """Возвращает список верифицированных пользователей (user_id, username)"""
+    # Реализация зависит от твоей БД
+
+async def get_unverified_users(self, chat_id: int) -> list[tuple[int, str, datetime]]:
+    """Возвращает список неверифицированных пользователей с датой вступления"""
+    # Реализация зависит от твоей БД
