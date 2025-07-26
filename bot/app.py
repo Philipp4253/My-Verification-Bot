@@ -51,3 +51,6 @@ class BotApp:
             await self.db_manager.close()
         if hasattr(self, 'bot') and self.bot:
             await self.bot.session.close()
+async def start_polling(self):
+    """Алиас для run() для совместимости"""
+    await self.run()
