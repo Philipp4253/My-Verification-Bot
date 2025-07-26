@@ -79,3 +79,30 @@ async def is_user_verified(self, user_id: int, chat_id: int) -> bool:
     """Проверяет, прошел ли пользователь верификацию в указанном чате"""
     # Реализуй этот метод в соответствии с твоей структурой базы данных
     # Должен возвращать True, если пользователь верифицирован
+async def check_unverified_users(self, chat_id: int, hours_limit: int = 24):
+    """Проверяет и удаляет неверифицированных пользователей"""
+    try:
+        # Получаем неверифицированных пользователей
+        unverified = await self.get_unverified_users(chat_id)
+        
+        # Фильтруем тех, кто давно в группе
+        now = datetime.now()
+        to_remove = []
+        
+        for user_id, join_date in unverified:
+            if (now - join_date).total_seconds() > hours_limit * 3600:
+                to_remove.append(user_id)
+        
+        # Удаляем пользователей
+        for user_id in to_remove:
+            try:
+                await self.bot.ban_chat_member(chat_id, user_id)
+                await self.bot.unban_chat_member(chat_id, user_id)  # Разбаниваем, чтобы могли вернуться
+                logger.info(f"Удален неверифицированный пользователь {user_id} из чата {chat_id}")
+            except Exception as e:
+                logger.error(f"Ошибка при удалении {user_id}: {e}")
+        
+        return len(to_remove)
+    except Exception as e:
+        logger.error(f"Ошибка в check_unverified_users: {e}")
+        return 0
