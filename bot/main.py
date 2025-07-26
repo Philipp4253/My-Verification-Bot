@@ -41,3 +41,20 @@ if __name__ == "__main__":
     except Exception as e:
         logger.error(f"Фатальная ошибка: {e}")
         sys.exit(1)
+async def background_tasks(bot: Bot, admin_service: AdminService):
+    """Фоновые задачи бота"""
+    while True:
+        try:
+            # Для всех групп из настроек
+            for chat_id in settings.moderated_chats:
+                removed_count = await admin_service.check_unverified_users(chat_id)
+                if removed_count > 0:
+                    logger.info(f"Удалено {removed_count} неверифицированных пользователей из {chat_id}")
+        except Exception as e:
+            logger.error(f"Ошибка в фоновой задаче: {e}")
+        
+        await asyncio.sleep(3600)  # Проверка каждый час
+
+async def on_startup(bot: Bot, admin_service: AdminService):
+    """Действия при запуске бота"""
+    asyncio.create_task(background_tasks(bot, admin_service))
