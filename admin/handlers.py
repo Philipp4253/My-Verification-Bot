@@ -293,3 +293,29 @@ async def cmd_report(
     except Exception as e:
         logger.error(f"Ошибка при формировании отчета: {e}")
         await message.reply("❌ Произошла ошибка при формировании отчета")
+
+@admin_handlers_router.chat_member(ChatMemberUpdatedFilter(
+    member_status_changed=ChatMemberStatus.LEFT >> ChatMemberStatus.MEMBER
+))
+async def on_new_member(event: ChatMemberUpdated, admin_service: AdminService):
+    user = event.new_chat_member.user
+    if user.is_bot:
+        return
+
+    # Добавляем пользователя в БД
+    await admin_service.add_user(
+        user_id=user.id,
+        chat_id=event.chat.id,
+        username=user.username,
+        full_name=user.full_name
+    )
+
+    # Отправляем приветственное сообщение
+    try:
+        await event.bot.send_message(
+            chat_id=user.id,
+            text=f"👋 Добро пожаловать в {event.chat.title}!\n\n"
+                 "Для доступа к чату пройди верификацию: /verify"
+        )
+    except Exception as e:
+        logger.error(f"Не удалось отправить сообщение {user.id}: {e}")
