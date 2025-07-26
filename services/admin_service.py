@@ -8,6 +8,92 @@ from bot.database.manager import DatabaseManager
 from bot.database.models.admin import Admin
 from bot.database.models.group import Group
 
+from datetime import datetime
+from typing import Optional, List, Tuple
+import aiosqlite
+
+class AdminService:
+    def __init__(self, bot: Bot):
+        self.bot = bot
+        self.db_path = "database.db"
+        
+        # Создаем таблицы при инициализации
+        asyncio.create_task(self._init_db())
+
+    async def _init_db(self):
+        """Инициализация базы данных"""
+        async with aiosqlite.connect(self.db_path) as db:
+            await db.execute("""
+                CREATE TABLE IF NOT EXISTS users (
+                    user_id INTEGER NOT NULL,
+                    chat_id INTEGER NOT NULL,
+                    username TEXT,
+                    full_name TEXT,
+                    verified BOOLEAN DEFAULT 0,
+                    join_date DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (user_id, chat_id)
+                )
+            """)
+            await db.commit()
+
+    async def _get_user(self, user_id: int, chat_id: int) -> Optional[dict]:
+        """Получает данные пользователя"""
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute(
+                "SELECT * FROM users WHERE user_id = ? AND chat_id = ?",
+                (user_id, chat_id)
+            )
+            row = await cursor.fetchone()
+            return dict(row) if row else None
+
+    async def add_user(self, user_id: int, chat_id: int, username: str, full_name: str):
+        """Добавляет пользователя в БД"""
+        async with aiosqlite.connect(self.db_path) as db:
+            await db.execute("""
+                INSERT OR IGNORE INTO users (user_id, chat_id, username, full_name)
+                VALUES (?, ?, ?, ?)
+            """, (user_id, chat_id, username, full_name))
+            await db.commit()
+
+    async def verify_user(self, user_id: int, chat_id: int):
+        """Помечает пользователя как верифицированного"""
+        async with aiosqlite.connect(self.db_path) as db:
+            await db.execute("""
+                UPDATE users SET verified = 1 
+                WHERE user_id = ? AND chat_id = ?
+            """, (user_id, chat_id))
+            await db.commit()
+
+    async def is_user_verified(self, user_id: int, chat_id: int) -> bool:
+        """Проверяет верификацию пользователя"""
+        user = await self._get_user(user_id, chat_id)
+        return user and user.get('verified', False)
+
+    async def get_verified_users(self, chat_id: int) -> List[Tuple[int, str]]:
+        """Возвращает список верифицированных пользователей"""
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute("""
+                SELECT user_id, username FROM users 
+                WHERE chat_id = ? AND verified = 1
+            """, (chat_id,))
+            return await cursor.fetchall()
+
+    async def get_unverified_users(self, chat_id: int) -> List[Tuple[int, str, datetime]]:
+        """Возвращает неверифицированных пользователей с датой вступления"""
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute("""
+                SELECT user_id, username, join_date FROM users 
+                WHERE chat_id = ? AND verified = 0
+            """, (chat_id,))
+            return await cursor.fetchall()
+
+    async def remove_user(self, user_id: int, chat_id: int):
+        """Удаляет пользователя из БД"""
+        async with aiosqlite.connect(self.db_path) as db:
+            await db.execute("""
+                DELETE FROM users WHERE user_id = ? AND chat_id = ?
+            """, (user_id, chat_id))
+            await db.commit()
 
 class AdminService:
     """Сервис для бизнес-логики, связанной с администраторами."""
