@@ -11,6 +11,68 @@ from bot.handlers.admin.core import user_is_admin_in_chat
 from bot.services.admin_service import AdminService
 from config.settings import Settings
 
+# В начало файла добавляем новые импорты
+from aiogram.types import ChatMemberUpdated
+from aiogram.filters import ChatMemberUpdatedFilter
+from aiogram.enums import ChatMemberStatus
+
+# Добавляем новый обработчик в конец файла (перед регистрацией хэндлеров)
+@admin_handlers_router.chat_member(
+    ChatMemberUpdatedFilter(
+        member_status_changed=ChatMemberStatus.LEFT >> ChatMemberStatus.MEMBER
+    )
+)
+async def on_new_member(event: ChatMemberUpdated, admin_service: AdminService, settings: Settings):
+    """
+    Обрабатывает вступление новых участников в группу.
+    Отправляет им приветственное сообщение с просьбой пройти верификацию.
+    """
+    try:
+        # Игнорируем ботов и случаи, когда бот сам добавляется в группу
+        if event.new_chat_member.user.is_bot or event.new_chat_member.user.id == event.bot.id:
+            return
+
+        # Проверяем, что событие произошло в группе/супергруппе
+        if event.chat.type not in ["group", "supergroup"]:
+            return
+
+        # Проверяем, что пользователь еще не прошел верификацию
+        if await admin_service.is_user_verified(event.new_chat_member.user.id, event.chat.id):
+            return
+
+        try:
+            # Пытаемся отправить сообщение в ЛС
+            await event.bot.send_message(
+                chat_id=event.new_chat_member.user.id,
+                text=f"👋 Привет, {event.new_chat_member.user.first_name}!\n\n"
+                     f"Чтобы писать в группе {event.chat.title}, тебе нужно пройти верификацию.\n\n"
+                     f"Нажми /verify в этой группе, чтобы начать."
+            )
+        except Exception as e:
+            logger.warning(f"Не удалось отправить сообщение пользователю {event.new_chat_member.user.id}: {e}")
+            # Если не получилось отправить в ЛС, пишем в группу (если бот имеет права)
+            if await user_is_admin_in_chat(
+                await event.bot.me(), event.chat.id, admin_service, settings, event.bot
+            ):
+                msg = await event.chat.send_message(
+                    f"{event.new_chat_member.user.mention_html()}, "
+                    f"для доступа к чату тебе нужно пройти верификацию. Нажми /verify",
+                    parse_mode="HTML"
+                )
+                # Удаляем сообщение через 1 минуту
+                asyncio.create_task(_delete_message_later(msg))
+    except Exception as e:
+        logger.error(f"Ошибка в обработчике нового участника: {e}", exc_info=True)
+
+
+async def _delete_message_later(message: Message, delay: int = 60):
+    """Удаляет сообщение через указанное количество секунд"""
+    await asyncio.sleep(delay)
+    try:
+        await message.delete()
+    except Exception:
+        pass
+
 admin_handlers_router = Router(name="admin_handlers")
 
 
