@@ -46,15 +46,19 @@ class Settings(BaseSettings):
         return v
 
      @field_validator('allowed_file_types', mode='before')
-def parse_file_types(cls, v):
-    if v is None:
-        return ["image/jpeg", "image/png", "application/pdf"]
+     def parse_file_types(cls, v):
+     default_types = ["image/jpeg", "image/png", "application/pdf"]
+         if v is None:
+        return default_types
     if isinstance(v, str):
-        if v.startswith('[') and v.endswith(']'):  # Если случайно передали JSON
-            import json
-            return json.loads(v)
-        return [ft.strip() for ft in v.split(',') if ft.strip()]
-    return v
+        try:
+            if v.startswith('[') and v.endswith(']'):  # Если это JSON
+                import json
+                return json.loads(v)
+            return [ft.strip() for ft in v.split(',') if ft.strip()] or default_types
+        except Exception:
+            return default_types
+    return v or default_types
 
     def get_telegram_bot_token(self) -> str:
         return self.telegram_bot_token.get_secret_value()
